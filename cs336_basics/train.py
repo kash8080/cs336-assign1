@@ -28,14 +28,16 @@ def resolve_device(requested: str) -> str:
 
 
 @torch.no_grad()
-def evaluate(model, loader, val_data, num_batches):
+def evaluate(model, loader, val_data, num_batches, use_amp=False):
     """Average cross-entropy over a few validation batches."""
     model.eval()
     total = 0.0
     for _ in range(num_batches):
         inputs, targets = loader.load(val_data)
-        logits = model(inputs)
-        total += cross_entropy(logits, targets).item()
+        with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=use_amp):
+            logits = model(inputs)
+            loss = cross_entropy(logits, targets)
+        total += loss.item()
     model.train()
     return total / num_batches
 
@@ -75,6 +77,13 @@ def train(args: argparse.Namespace) -> None:
         eps=args.eps,
     )
 
+    # --- mixed precision (CUDA only) ---
+    # T4/Turing has fp16 tensor cores but no bf16, so we use fp16 autocast there.
+    # autocast runs the big matmuls in fp16 (tensor cores) while keeping the fp32
+    # master weights; GradScaler rescales the loss so tiny fp16 grads don't underflow.
+    use_amp = device == "cuda"
+    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
+
     # --- optionally resume ---
     start_step = 0
     if args.resume_from:
@@ -100,17 +109,20 @@ def train(args: argparse.Namespace) -> None:
         # 2. Sample a batch
         inputs, targets = loader.load(train_data)
 
-        # 3. Forward + loss
-        logits = model(inputs)
-        loss = cross_entropy(logits, targets)
+        # 3. Forward + loss  (autocast runs matmuls in fp16 on CUDA tensor cores)
+        with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=use_amp):
+            logits = model(inputs)
+            loss = cross_entropy(logits, targets)
 
-        # 4. Backward
+        # 4. Backward  (scale the loss up so small fp16 grads don't underflow to 0)
         optimizer.zero_grad()
-        loss.backward()
+        scaler.scale(loss).backward()
 
-        # 5. Clip, then step
+        # 5. Unscale grads back to true magnitude, then clip and step
+        scaler.unscale_(optimizer)
         grad_norm = gradient_clipping(args.max_grad_norm, model.parameters())
-        optimizer.step()
+        scaler.step(optimizer)
+        scaler.update()
 
         # mac is heating up. so slow down training to reduce heating. 
         # longer training is fine as it's just learning
@@ -141,7 +153,7 @@ def train(args: argparse.Namespace) -> None:
 
         # --- validation ---
         if val_data is not None and step > 0 and step % args.eval_interval == 0:
-            val_loss = evaluate(model, loader, val_data, args.eval_batches)
+            val_loss = evaluate(model, loader, val_data, args.eval_batches, use_amp=use_amp)
             best_val_loss = min(best_val_loss, val_loss)
             print(f"step {step:>6} | val_loss {val_loss:.4f} | best {best_val_loss:.4f}")
             if use_wandb:
