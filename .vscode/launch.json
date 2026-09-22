@@ -1,0 +1,79 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug train (fast, CPU)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "cs336_basics.train",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": false,
+      "args": [
+        "--train-path", "training_data_encoded.npy",
+        "--val-path", "validation_data_encoded.npy",
+        "--device", "cpu",
+        "--max-steps", "501",
+        "--batch-size", "8",
+        "--log-interval", "10",
+        "--eval-interval", "50",
+        "--eval-batches", "2",
+        "--checkpoint-interval", "1000",
+        "--context-length", "128"
+      ]
+    },
+    {
+      "name": "Debug train (MPS, real config)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "cs336_basics.train",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": false,
+      "args": [
+        "--train-path", "training_data_encoded.npy",
+        "--val-path", "validation_data_encoded.npy",
+        "--device", "mps",
+        "--max-steps", "5000",
+        "--d-model", "512",
+        "--num-layers", "4",
+        "--eval-interval", "50",
+        "--wandb-project", "cs336-a1",
+        "--wandb-name", "lr1e-3-bs32-2",
+        "--batch-size", "32"
+      ]
+    },
+    {
+      "name": "Debug train Small(MPS, real config)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "cs336_basics.train",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": false,
+      "args": [
+        "--train-path", "training_data_encoded.npy",
+        "--val-path", "validation_data_encoded.npy",
+        "--device", "mps",
+        "--max-steps", "500",
+        "--d-model", "512",
+        "--num-layers", "4",
+        "--num-heads", "16",
+        "--context-length", "128",
+        "--eval-interval", "50",
+        "--wandb-project", "cs336-b16",
+        "--wandb-name", "lr1e-3-small",
+        "--batch-size", "16"
+      ]
+    },
+    {
+      "name": "Debug train (current file's args)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": false
+    }
+  ]
+}
