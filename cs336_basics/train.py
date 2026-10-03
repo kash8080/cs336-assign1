@@ -66,6 +66,7 @@ def train(args: argparse.Namespace) -> None:
         num_heads=args.num_heads,
         d_ff=args.d_ff,
         rope_theta=args.rope_theta,
+        checkpoint_blocks=args.activation_checkpointing,
     ).to(device)
 
     # --- optimizer ---
@@ -190,6 +191,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--num-heads", type=int, default=16)
     p.add_argument("--d-ff", type=int, default=1344) # ~8/3 of d_model and a multiple of 64
     p.add_argument("--rope-theta", type=float, default=10_000.0)
+    p.add_argument("--activation-checkpointing", action="store_true",
+                   help="Recompute each TransformerBlock's activations during backward to save memory "
+                        "(one torch.utils.checkpoint per block). Not related to --checkpoint-dir.")
 
     # --- optimizer / AdamW ---
     p.add_argument("--max-lr", type=float, default=1e-3)
